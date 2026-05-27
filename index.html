@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 InBody 영업 리그</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Noto Sans KR', 'Lato', sans-serif; }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #971B2F;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        // ⭐ 여기에 Google Apps Script 웹 앱 URL을 입력하세요!
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwvyE9SMhcT0JYcIEJ-WUpAnjQxCH5_MUmRsOJMidwSVNW7eFtJ8yHfIsM5wtp8PzLc/exec';
+        
+        const BRAND_COLORS = {
+            primary: '#971B2F',
+            lightGray: '#B2B4B8',
+            coolGray: '#67767F',
+            darkGray: '#4B4F5A',
+            black: '#101820',
+            iceGray: '#A2B2C8'
+        };
+
+        const ACCENT_COLORS = {
+            gold: '#FFD700',
+            silver: '#C0C0C0',
+            bronze: '#CD7F32',
+            purple: '#9333EA',
+            blue: '#3B82F6',
+            green: '#10B981',
+            orange: '#F59E0B'
+        };
+
+        // ⭐ 서울외국환중개 전월 매매기준율 (매달 수동 업데이트 필요)
+        // 참고: https://www.kebhana.com/cont/mall/mall08/mall0805/index.jsp
+        const initialExchangeRates = {
+            KRW: 1, 
+            USD: 1422.22,    // 미국 달러
+            EUR: 1607.46,    // 유럽 유로
+            JPY: 9.5079,     // 일본 엔 (1엔 기준)
+            CNY: 197.78,     // 중국 위안
+            GBP: 1875.08,    // 영국 파운드
+            AUD: 916.97,     // 호주 달러
+            MYR: 332.18,     // 말레이시아 링깃
+            INR: 16.32,      // 인도 루피
+            VND: 0.0547,     // 베트남 동
+            MXN: 74.2,       // 멕시코 페소
+            TRY: 36.05       // 튀르키예 리라
+        };
+
+        const initialTeams = {
+            '1부': [
+                { name: '김도성', division: '법인', targetKRW: 170, targetLocal: 228840970, currency: 'MXN', location: '멕시코법인', growth: 30, sales: 0, lastYearAchievement: 74 },
+                { name: '윤학희', division: '법인', targetKRW: 910, targetLocal: 63986928, currency: 'USD', location: '미국법인', growth: 20, sales: 0, lastYearAchievement: 74 },
+                { name: '이상화', division: '법인', targetKRW: 360, targetLocal: 22401802, currency: 'EUR', location: '유럽법인', growth: 24, sales: 0, lastYearAchievement: 83 },
+                { name: '정종현', division: '법인', targetKRW: 240, targetLocal: 121346951, currency: 'CNY', location: '중국법인', growth: 21, sales: 0, lastYearAchievement: 87 },
+                { name: '신기권', division: '법인', targetKRW: 212, targetLocal: 2231828269, currency: 'JPY', location: '일본법인', growth: 10, sales: 0, lastYearAchievement: 100 },
+                { name: '차인준', division: '해외', targetKRW: 276, targetLocal: 276, currency: 'KRW', location: '해외사업파트', growth: 20, sales: 0, lastYearAchievement: 83 },
+                { name: '임종권', division: '국내', targetKRW: 206, targetLocal: 206, currency: 'KRW', location: '국내사업파트', growth: 10, sales: 0, lastYearAchievement: 91 },
+                { name: '박하진', division: '관계사', targetKRW: 370, targetLocal: 370, currency: 'KRW', location: '인바디헬스케어', growth: 34, sales: 0, lastYearAchievement: 92 },
+                { name: '홍기현', division: '관계사', targetKRW: 130, targetLocal: 130, currency: 'KRW', location: '인바디혈압계', growth: 20, sales: 0, lastYearAchievement: 87 }
+            ],
+            '2부': [
+                { name: 'Erica Lee', division: '법인', targetKRW: 125, targetLocal: 8760951, currency: 'USD', location: '미국 뉴욕법인', growth: 33, sales: 0, monthlySales: {}, lastYearAchievement: 100 },
+                { name: 'Brian', division: '법인', targetKRW: 128, targetLocal: 9014077, currency: 'USD', location: '미국 플로리다법인', growth: 32, sales: 0, monthlySales: {}, lastYearAchievement: 100 },
+                { name: '최형욱', division: '법인', targetKRW: 72, targetLocal: 72, currency: 'KRW', location: '아시아법인', growth: 29, sales: 0, monthlySales: {}, lastYearAchievement: 100 },
+                { name: '차인준', division: '법인', targetKRW: 57, targetLocal: 349264706, currency: 'INR', location: '인도법인', growth: 30, sales: 0, monthlySales: {}, lastYearAchievement: 100 },
+                { name: '김현지', division: '법인', targetKRW: 30, targetLocal: 3249834, currency: 'AUD', location: '호주법인', growth: 50, sales: 0, monthlySales: {}, lastYearAchievement: 100 },
+                { name: '임창혁', division: '법인', targetKRW: 41, targetLocal: 2186573, currency: 'GBP', location: '영국법인', growth: 37, sales: 0, monthlySales: {}, lastYearAchievement: 100 },
+                { name: '이동은', division: 'W', targetKRW: 45, targetLocal: 45, currency: 'KRW', location: 'W파트', growth: 29, sales: 0, monthlySales: {}, lastYearAchievement: 100 }
+            ],
+            '3부': [
+                { name: '안영재', division: '법인', targetKRW: 28, targetLocal: 1741878, currency: 'EUR', location: '프랑스', growth: 65, sales: 0, lastYearAchievement: 67 },
+                { name: '김남건', division: '시장개발팀(신규)', targetKRW: 23, targetLocal: 11652213, currency: 'CNY', location: '중국 광동성', growth: 25, sales: 0, lastYearAchievement: 100 },
+                { name: '이상욱', division: '법인', targetKRW: 15, targetLocal: 268738574, currency: 'VND', location: '베트남법인', growth: 67, sales: 0, lastYearAchievement: 100 },
+                { name: '민들레', division: '법인', targetKRW: 12, targetLocal: 33287101, currency: 'TRY', location: '튀르키예법인', growth: 110, sales: 0, lastYearAchievement: 67 },
+                { name: '정창경', division: '지사', targetKRW: 13, targetLocal: 914064, currency: 'USD', location: '태국지사', growth: 50, sales: 0, lastYearAchievement: 100 },
+                { name: '이민지', division: '지사', targetKRW: 14, targetLocal: 984377, currency: 'USD', location: '인도네시아지사', growth: 50, sales: 0, lastYearAchievement: 100 },
+                { name: '이용배', division: '지사', targetKRW: 10, targetLocal: 622099, currency: 'EUR', location: '폴란드지사', growth: 100, sales: 0, lastYearAchievement: 50 },
+                { name: '조배근', division: '지사', targetKRW: 12, targetLocal: 746519, currency: 'EUR', location: '스위스지사', growth: 100, sales: 0, lastYearAchievement: 50 },
+                { name: '권해섭', division: '지사', targetKRW: 6, targetLocal: 703126, currency: 'USD', location: '필리핀지사', growth: 100, sales: 0, lastYearAchievement: 50 }
+            ],
+            '4부(해외)': [
+                { name: '오미소', division: '해외', targetKRW: 6, targetLocal: 703126, currency: 'USD', location: '필리핀 지사', growth: 100, sales: 0, lastYearAchievement: 50 },
+                { name: '김단비', division: '해외', targetKRW: 17, targetLocal: 1057569, currency: 'EUR', location: '이탈리아', growth: 37, sales: 0, lastYearAchievement: 67 },
+                { name: '최빅토리아', division: '해외', targetKRW: 13, targetLocal: 13, currency: 'KRW', location: '러시아/카자흐스탄', growth: 63, sales: 0, lastYearAchievement: 100 },
+                { name: '황성덕', division: '해외', targetKRW: 25, targetLocal: 1757815, currency: 'USD', location: 'UAE', growth: 39, sales: 0, lastYearAchievement: 67 },
+                { name: '서준원', division: '해외', targetKRW: 5, targetLocal: 351563, currency: 'USD', location: '모로코', growth: 150, sales: 0, lastYearAchievement: 33 },
+                { name: '문예림', division: '해외', targetKRW: 11, targetLocal: 773439, currency: 'USD', location: '아르헨티나', growth: 50, sales: 0, lastYearAchievement: 67 },
+                { name: '장지웅', division: '해외', targetKRW: 9, targetLocal: 632813, currency: 'USD', location: '칠레', growth: 80, sales: 0, lastYearAchievement: 50 }
+            ],
+            '4부(국내)': [
+                { name: '천장훈', division: '국내', targetKRW: 15, targetLocal: 15, currency: 'KRW', location: '아파트 공용부', growth: 28, sales: 0, lastYearAchievement: 100 },
+                { name: '최자은', division: '국내', targetKRW: 15, targetLocal: 15, currency: '처', location: '커뮤니티 인바디존', growth: 114, sales: 0, lastYearAchievement: 50 },
+                { name: '정명', division: '국내', targetKRW: 17, targetLocal: 17, currency: 'KRW', location: '기업', growth: 36, sales: 0, lastYearAchievement: 75 },
+                { name: '김남국', division: '국내', targetKRW: 10, targetLocal: 10, currency: 'KRW', location: '대학교', growth: 30, sales: 0, lastYearAchievement: 75 },
+                { name: '김명수', division: '국내', targetKRW: 5, targetLocal: 5, currency: 'KRW', location: '체육회 연맹', growth: 0, sales: 0, lastYearAchievement: 100 },
+                { name: '윤혜린', division: 'BWA 7대', targetKRW: 7, targetLocal: 7, currency: '대', location: 'BWA/970 7대', growth: 0, sales: 0, lastYearAchievement: 100 }
+            ],
+            '집중시장': [
+                { name: '변재혁', division: '법인', targetKRW: 126, targetLocal: 8859389, currency: 'USD', location: '미국법인 컨슈머', growth: 50, sales: 0, lastYearAchievement: 67 },
+                { name: '박하영', division: '해외', targetKRW: 210, targetLocal: 210, currency: 'KRW', location: '중남미/중동아프리카', growth: 30, sales: 0, lastYearAchievement: 67 },
+                { name: '최민, 신희관, 양윤정', division: '국내', targetKRW: 34, targetLocal: 34, currency: '대', location: 'BWA 170대', growth: 21, sales: 0, lastYearAchievement: 67 },
+                { name: '이동우', division: '국내', targetKRW: 30, targetLocal: 30, currency: 'KRW', location: '강서직영지사', growth: 8, sales: 0, lastYearAchievement: 92 },
+                { name: '이명원, 장환호', division: '국내', targetKRW: 50, targetLocal: 50, currency: '처', location: '약국/건기식', growth: 669, sales: 0, lastYearAchievement: 8 }
+            ]
+        };
+
+        const prizeInfo = {
+            '1부': { total: 2.25, prizes: [1.00, 0.50, 0.30, 0.20, 0.15, 0.10] },
+            '2부': { total: 1.25, prizes: [0.50, 0.30, 0.20, 0.15, 0.10] },
+            '3부': { total: 0.54, prizes: [0.25, 0.15, 0.07, 0.03, 0.02, 0.02] },
+            '4부(해외)': { total: 0.09, prizes: [0.05, 0.03, 0.01] },
+            '4부(국내)': { total: 0.09, prizes: [0.05, 0.03, 0.01] },
+            '집중시장': { total: 0.54, prizes: [0.25, 0.15, 0.07, 0.03, 0.02, 0.02] }
+        };
+
+        function SalesDashboard() {
+            const [exchangeRates, setExchangeRates] = useState(initialExchangeRates);
+            const [teams, setTeams] = useState(initialTeams);
+            const [selectedTeam, setSelectedTeam] = useState('메인');
+            const [editingMember, setEditingMember] = useState(null);
+            const [editValue, setEditValue] = useState('');
+            const [saveStatus, setSaveStatus] = useState('');
+            const [showExchangeModal, setShowExchangeModal] = useState(false);
+            const [tempRates, setTempRates] = useState(initialExchangeRates);
+            const [showResultsModal, setShowResultsModal] = useState(false);
+            const [selectedResultLeague, setSelectedResultLeague] = useState('1부');
+            const [viewMode, setViewMode] = useState('cumulative');
+            const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+            const [loading, setLoading] = useState(false);
+            const [autoPlay, setAutoPlay] = useState(false);
+            const autoPlayRef = React.useRef(null);
+            const [cardModal, setCardModal] = useState(null); // 'members' | 'achievement' | 'prize'
+
+            const TAB_ORDER = ['메인', ...Object.keys(initialTeams)];
+
+            useEffect(() => {
+                if (autoPlay) {
+                    autoPlayRef.current = setInterval(() => {
+                        setSelectedTeam(prev => {
+                            const idx = TAB_ORDER.indexOf(prev);
+                            return TAB_ORDER[(idx + 1) % TAB_ORDER.length];
+                        });
+                    }, 15000);
+                } else {
+                    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+                }
+                return () => { if (autoPlayRef.current) clearInterval(autoPlayRef.current); };
+            }, [autoPlay]);
+
+            // 데이터 로드
+            useEffect(() => {
+                loadDataFromSheet();
+            }, []);
+
+            // 전광판 단축키 Shift+P
+            useEffect(() => {
+                const handleKey = (e) => {
+                    if (e.shiftKey && e.key === 'P') {
+                        setAutoPlay(v => !v);
+                    }
+                };
+                window.addEventListener('keydown', handleKey);
+                return () => window.removeEventListener('keydown', handleKey);
+            }, []);
+
+            // Google Sheets에서 멤버 + 실적 + 환율 모두 로드
+            const loadDataFromSheet = async () => {
+                if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_SCRIPT_URL_HERE') {
+                    console.warn('Google Script URL 미설정 - HTML 내 데이터 사용');
+                    return;
+                }
+                setLoading(true);
+                try {
+                    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAll`);
+                    const data = await response.json();
+
+                    // 1) 멤버 데이터로 teams 재구성
+                    if (data.members && data.members.length > 0) {
+                        const builtTeams = {};
+                        data.members.forEach(m => {
+                            const league = m.league;
+                            if (!builtTeams[league]) builtTeams[league] = [];
+                            builtTeams[league].push({
+                                name: m.name,
+                                division: m.division,
+                                targetKRW: Number(m.targetKRW),
+                                currency: m.currency,
+                                location: m.location,
+                                growth: Number(m.growth),
+                                lastYearAchievement: Number(m.lastYearAchievement),
+                                targetLocal: Number(m.targetLocal), // 처/대 단위용으로 유지
+                                sales: 0,
+                                monthlySales: {}
+                            });
+                        });
+
+                        // 2) 실적 데이터 적용
+                        if (data.sales && data.sales.length > 0) {
+                            data.sales.forEach(record => {
+                                const { name, league, month, sales } = record;
+                                if (builtTeams[league]) {
+                                    const idx = builtTeams[league].findIndex(m => m.name === name);
+                                    if (idx !== -1) {
+                                        if (!builtTeams[league][idx].monthlySales) builtTeams[league][idx].monthlySales = {};
+                                        builtTeams[league][idx].monthlySales[String(month)] = Number(sales);
+                                        builtTeams[league][idx].sales = Object.values(builtTeams[league][idx].monthlySales)
+                                            .reduce((sum, v) => sum + v, 0);
+                                    }
+                                }
+                            });
+                        }
+                        setTeams(builtTeams);
+                    }
+
+                    // 3) 환율 데이터 적용
+                    if (data.rates && Object.keys(data.rates).length > 0) {
+                        setExchangeRates(prev => ({
+                            ...prev,
+                            ...Object.fromEntries(Object.entries(data.rates).map(([k, v]) => [k, Number(v)]))
+                        }));
+                    }
+                } catch (error) {
+                    console.error('데이터 로드 실패:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Google Sheets에 실적 저장
+            const saveDataToSheet = async (name, month, sales, currency) => {
+                if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_SCRIPT_URL_HERE') {
+                    return true;
+                }
+                setLoading(true);
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'saveSales', name, league: selectedTeam, month, sales, currency: currency || 'KRW' })
+                    });
+                    return true;
+                } catch (error) {
+                    console.error('데이터 저장 실패:', error);
+                    alert('데이터 저장에 실패했습니다.');
+                    return false;
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Google Sheets에 환율 저장
+            const saveExchangeRatesToSheet = async (rates) => {
+                if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_SCRIPT_URL_HERE') return;
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'saveExchangeRates', rates })
+                    });
+                } catch (error) {
+                    console.error('환율 저장 실패:', error);
+                }
+            };
+
+            const calculateAchievement = (sales, targetLocal) => {
+                if (targetLocal === 0) return 0;
+                return Math.round((sales / targetLocal) * 100);
+            };
+
+            const convertToKRW = (amount, currency) => {
+                if (currency === 'KRW') return amount;
+                if (currency === '처' || currency === '대') return amount;
+                return (amount * exchangeRates[currency]) / 100000000;
+            };
+
+            // targetKRW(억 단위) 기준으로 현지화폐 목표 동적 계산
+            // sales도 현지화폐 단위이므로: targetKRW억 × 1억 ÷ 환율 = 현지화폐 목표
+            // KRW/처/대는 targetKRW 그대로
+            const getTargetLocal = (member) => {
+                const { currency, targetKRW } = member;
+                if (currency === 'KRW') return targetKRW;
+                if (currency === '처' || currency === '대') return member.targetLocal;
+                if (!exchangeRates[currency]) return member.targetLocal;
+                return Math.round((targetKRW * 100000000) / exchangeRates[currency]);
+            };
+
+            const formatLocalCurrency = (amount, currency) => {
+                if (currency === 'KRW') return `${amount}억`;
+                if (currency === '처') return `${amount}처`;
+                if (currency === '대') return `${amount}대`;
+                return amount.toLocaleString();
+            };
+
+            const teamSummary = Object.keys(teams).map(teamName => {
+                const teamData = teams[teamName];
+                const totalTargetKRW = teamData.reduce((sum, member) => sum + member.targetKRW, 0);
+                const avgAchievement = teamData.reduce((sum, member) => 
+                    sum + calculateAchievement(member.sales, getTargetLocal(member)), 0) / teamData.length;
+                
+                return {
+                    name: teamName,
+                    totalTargetKRW,
+                    avgAchievement: Math.round(avgAchievement),
+                    memberCount: teamData.length,
+                    prize: prizeInfo[teamName].total
+                };
+            });
+
+            const currentTeamData = selectedTeam === '메인' ? [] : teams[selectedTeam].map(member => {
+                const displaySales = viewMode === 'cumulative' ? member.sales : (member.monthlySales?.[selectedMonth] || 0);
+                
+                let salesKRW;
+                if (viewMode === 'cumulative') {
+                    // 월별 데이터가 있으면 월별로 계산, 없으면 전체 sales 사용
+                    if (member.monthlySales && Object.keys(member.monthlySales).length > 0) {
+                        salesKRW = Object.entries(member.monthlySales).reduce((sum, [month, amount]) => {
+                            return sum + convertToKRW(amount, member.currency);
+                        }, 0);
+                    } else {
+                        salesKRW = convertToKRW(member.sales || 0, member.currency);
+                    }
+                } else {
+                    salesKRW = convertToKRW(displaySales, member.currency);
+                }
+                
+                // KRW는 원화(억) 기준 달성률, 나머지는 현지화폐 기준
+                const achievement = member.currency === 'KRW'
+                    ? calculateAchievement(salesKRW, member.targetKRW)
+                    : calculateAchievement(displaySales, getTargetLocal(member));
+
+                return {
+                    ...member,
+                    displaySales,
+                    achievement,
+                    salesKRW
+                };
+            });
+
+            const sortedTeamData = selectedTeam === '메인' ? [] : [...currentTeamData].sort((a, b) => b.achievement - a.achievement);
+
+            const handleEdit = (member) => {
+                setEditingMember(member.name);
+                const currentSales = viewMode === 'monthly' 
+                    ? (member.monthlySales?.[selectedMonth] || 0)
+                    : member.sales;
+                setEditValue(currentSales.toString());
+            };
+
+            const handleSave = async (memberName) => {
+                const rawValue = parseFloat(editValue) || 0;
+                // KRW: 원 단위로 입력받아 억 단위로 변환, 처/대: 그대로
+                const member = teams[selectedTeam].find(m => m.name === memberName);
+                // KRW: 원 단위 입력 → 자동으로 억 단위 변환 (항상)
+                // 처/대/외화: 그대로
+                const value = (member && member.currency === 'KRW')
+                    ? rawValue / 100000000
+                    : rawValue;
+                
+                // Google Sheets에 저장
+                const success = await saveDataToSheet(memberName, selectedMonth, value, member ? member.currency : 'KRW');
+                
+                if (success) {
+                    // 현재 시간 생성
+                    const now = new Date();
+                    const timestamp = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                    
+                    // 로컬 상태 업데이트
+                    const newTeams = { ...teams };
+                    const memberIndex = newTeams[selectedTeam].findIndex(m => m.name === memberName);
+                    if (memberIndex !== -1) {
+                        if (viewMode === 'monthly') {
+                            if (!newTeams[selectedTeam][memberIndex].monthlySales) {
+                                newTeams[selectedTeam][memberIndex].monthlySales = {};
+                            }
+                            newTeams[selectedTeam][memberIndex].monthlySales[selectedMonth] = value;
+                            newTeams[selectedTeam][memberIndex].sales = Object.values(
+                                newTeams[selectedTeam][memberIndex].monthlySales
+                            ).reduce((sum, val) => sum + val, 0);
+                        } else {
+                            newTeams[selectedTeam][memberIndex].sales = value;
+                        }
+                        // 업데이트 일시 저장
+                        newTeams[selectedTeam][memberIndex].lastUpdated = timestamp;
+                        
+                        setTeams(newTeams);
+                        setSaveStatus('✓ 저장 완료');
+                        setTimeout(() => setSaveStatus(''), 2000);
+                    }
+                    setEditingMember(null);
+                    setEditValue('');
+                }
+            };
+
+            const handleCancel = () => {
+                setEditingMember(null);
+                setEditValue('');
+            };
+
+            const handleUpdateExchangeRates = () => {
+                setExchangeRates(tempRates);
+                saveExchangeRatesToSheet(tempRates);
+                setSaveStatus('✓ 환율 업데이트 완료');
+                setTimeout(() => setSaveStatus(''), 2000);
+                setShowExchangeModal(false);
+            };
+
+            const handleRateChange = (currency, value) => {
+                setTempRates({ ...tempRates, [currency]: parseFloat(value) || 0 });
+            };
+
+            return (
+                <div style={{minHeight: '100vh', background: 'linear-gradient(135deg, #f9fafb 0%, #e5e7eb 100%)', padding: '1.5rem', position: 'relative', overflow: 'hidden', fontFamily: "'Noto Sans KR', 'Lato', sans-serif"}}>
+                    {loading && (
+                        <div className="loading-overlay">
+                            <div style={{textAlign: 'center'}}>
+                                <div className="loading-spinner"></div>
+                                <p style={{marginTop: '1rem', color: BRAND_COLORS.primary, fontWeight: 'bold'}}>데이터 처리중...</p>
+                            </div>
+                        </div>
+                    )}
+                    <div style={{maxWidth: '1280px', margin: '0 auto', position: 'relative', zIndex: 10}}>
+                        {saveStatus && (
+                            <div style={{position: 'fixed', top: '1rem', right: '1rem', background: 'white', borderRadius: '0.75rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', padding: '1rem 1.5rem', borderLeft: `4px solid ${BRAND_COLORS.primary}`, zIndex: 50}}>
+                                <p style={{fontWeight: 'bold', fontSize: '1.125rem', color: BRAND_COLORS.black}}>{saveStatus}</p>
+                            </div>
+                        )}
+                        
+                        <div style={{marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: `4px solid ${BRAND_COLORS.primary}`, position: 'relative'}}>
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                                <div>
+                                    <h1 style={{fontSize: '3rem', fontWeight: '900', marginBottom: '0.75rem', color: BRAND_COLORS.primary, display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                                        🏆 2026 InBody 영업 리그
+                                    </h1>
+                                    <p style={{fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: BRAND_COLORS.coolGray}}>
+                                        ⚡ 실시간 순위 업데이트 (현지화폐 기준)
+                                        {autoPlay && <span style={{fontSize: '0.75rem', fontWeight: 'bold', color: 'white', backgroundColor: ACCENT_COLORS.green, padding: '0.15rem 0.5rem', borderRadius: '9999px'}}>ON</span>}
+                                    </p>
+                                </div>
+                                <div style={{display: 'flex', gap: '0.75rem'}}>
+                                    <button onClick={loadDataFromSheet} style={{padding: '0.6rem 1rem', borderRadius: '0.75rem', fontWeight: 'bold', fontSize: '0.875rem', color: 'white', backgroundColor: ACCENT_COLORS.blue, border: 'none', cursor: 'pointer', transition: 'all 0.3s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}>
+                                        🔄 데이터 새로고침
+                                    </button>
+                                    <button onClick={() => setShowResultsModal(true)} style={{padding: '0.6rem 1rem', borderRadius: '0.75rem', fontWeight: 'bold', fontSize: '0.875rem', color: 'white', backgroundColor: BRAND_COLORS.primary, border: 'none', cursor: 'pointer', transition: 'all 0.3s', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}}>
+                                        🏆 최종 결과
+                                    </button>
+                                    <button onClick={() => {
+                                        setTempRates(exchangeRates); 
+                                        setShowExchangeModal(true);
+                                    }} style={{padding: '0.6rem 1rem', borderRadius: '0.75rem', fontWeight: 'bold', fontSize: '0.875rem', color: 'white', backgroundColor: BRAND_COLORS.darkGray, border: 'none', cursor: 'pointer', transition: 'all 0.3s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}>
+                                        💱 환율
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginBottom: '2rem'}}>
+                            {/* 전체 인원 카드 */}
+                            <div onClick={()=>setCardModal('members')} style={{background: 'white', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`, cursor: 'pointer', transition: 'all 0.2s'}}
+                                onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                                    <div>
+                                        <p style={{fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: BRAND_COLORS.coolGray}}>전체 인원 <span style={{fontSize: '0.75rem', color: BRAND_COLORS.lightGray}}>▾ 클릭</span></p>
+                                        <p style={{fontSize: '3rem', fontWeight: '900', color: BRAND_COLORS.black}}>{teamSummary.reduce((sum,team)=>sum+team.memberCount,0)}명</p>
+                                    </div>
+                                    <span style={{fontSize: '5rem', opacity: 0.2, color: BRAND_COLORS.primary}}>👥</span>
+                                </div>
+                            </div>
+
+                            {/* 평균 달성률 카드 */}
+                            <div onClick={()=>setCardModal('achievement')} style={{background: 'white', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`, cursor: 'pointer', transition: 'all 0.2s'}}
+                                onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                                    <div>
+                                        <p style={{fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: BRAND_COLORS.coolGray}}>평균 달성률 <span style={{fontSize: '0.75rem', color: BRAND_COLORS.lightGray}}>▾ 클릭</span></p>
+                                        <p style={{fontSize: '3rem', fontWeight: '900', color: BRAND_COLORS.primary}}>
+                                            {(() => {
+                                                const allMembers = Object.values(teams).flat();
+                                                const totalAchievement = allMembers.reduce((sum,member) => sum+calculateAchievement(member.sales,getTargetLocal(member)),0);
+                                                return Math.round(totalAchievement / allMembers.length);
+                                            })()}%
+                                        </p>
+                                    </div>
+                                    <span style={{fontSize: '5rem', opacity: 0.2, color: BRAND_COLORS.primary}}>📈</span>
+                                </div>
+                            </div>
+
+                            {/* 총 상금 카드 */}
+                            <div onClick={()=>setCardModal('prize')} style={{background: 'white', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`, cursor: 'pointer', transition: 'all 0.2s'}}
+                                onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                                    <div>
+                                        <p style={{fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: BRAND_COLORS.coolGray}}>총 상금 <span style={{fontSize: '0.75rem', color: BRAND_COLORS.lightGray}}>▾ 클릭</span></p>
+                                        <p style={{fontSize: '3rem', fontWeight: '900', color: BRAND_COLORS.black}}>{Object.values(prizeInfo).reduce((s,v)=>s+v.total,0).toFixed(2)}억</p>
+                                    </div>
+                                    <span style={{fontSize: '5rem', opacity: 0.2, color: BRAND_COLORS.primary}}>🏆</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 카드 상세 모달 */}
+                        {cardModal && (
+                            <div onClick={()=>setCardModal(null)} style={{position: 'fixed', top:0, left:0, width:'100%', height:'100%', backgroundColor:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200}}>
+                                <div onClick={e=>e.stopPropagation()} style={{background:'white', borderRadius:'1.25rem', padding:'2rem', width:'90%', maxWidth:'560px', maxHeight:'80vh', overflowY:'auto', boxShadow:'0 25px 50px -12px rgba(0,0,0,0.35)'}}>
+
+                                    {/* 전체 인원 상세 */}
+                                    {cardModal==='members' && (<>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem'}}>
+                                            <h3 style={{fontSize:'1.5rem', fontWeight:'900', color:BRAND_COLORS.black}}>👥 리그별 인원</h3>
+                                            <button onClick={()=>setCardModal(null)} style={{background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:BRAND_COLORS.coolGray}}>✕</button>
+                                        </div>
+                                        <div style={{display:'flex', flexDirection:'column', gap:'0.75rem'}}>
+                                            {teamSummary.map(league=>(
+                                                <div key={league.name} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.875rem 1.25rem', borderRadius:'0.75rem', background:'#f9fafb', borderLeft:`4px solid ${BRAND_COLORS.primary}`}}>
+                                                    <span style={{fontWeight:'700', color:BRAND_COLORS.black}}>{league.name} 리그</span>
+                                                    <span style={{fontWeight:'900', fontSize:'1.25rem', color:BRAND_COLORS.primary}}>{league.memberCount}명</span>
+                                                </div>
+                                            ))}
+                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.875rem 1.25rem', borderRadius:'0.75rem', background:BRAND_COLORS.primary}}>
+                                                <span style={{fontWeight:'700', color:'white'}}>전체</span>
+                                                <span style={{fontWeight:'900', fontSize:'1.25rem', color:'white'}}>{teamSummary.reduce((s,t)=>s+t.memberCount,0)}명</span>
+                                            </div>
+                                        </div>
+                                    </>)}
+
+                                    {/* 평균 달성률 상세 */}
+                                    {cardModal==='achievement' && (<>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem'}}>
+                                            <h3 style={{fontSize:'1.5rem', fontWeight:'900', color:BRAND_COLORS.black}}>📈 리그별 평균 달성률</h3>
+                                            <button onClick={()=>setCardModal(null)} style={{background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:BRAND_COLORS.coolGray}}>✕</button>
+                                        </div>
+                                        <div style={{display:'flex', flexDirection:'column', gap:'0.75rem'}}>
+                                            {teamSummary.map(league=>(
+                                                <div key={league.name} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.875rem 1.25rem', borderRadius:'0.75rem', background:'#f9fafb', borderLeft:`4px solid ${BRAND_COLORS.primary}`}}>
+                                                    <span style={{fontWeight:'700', color:BRAND_COLORS.black}}>{league.name} 리그</span>
+                                                    <span style={{fontWeight:'900', fontSize:'1.25rem', color:league.avgAchievement>=100?ACCENT_COLORS.gold:BRAND_COLORS.primary}}>{league.avgAchievement}%</span>
+                                                </div>
+                                            ))}
+                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0.875rem 1.25rem', borderRadius:'0.75rem', background:BRAND_COLORS.primary}}>
+                                                <span style={{fontWeight:'700', color:'white'}}>전체 평균</span>
+                                                <span style={{fontWeight:'900', fontSize:'1.25rem', color:'white'}}>
+                                                    {(() => {
+                                                        const allMembers = Object.values(teams).flat();
+                                                        const total = allMembers.reduce((s,m)=>s+calculateAchievement(m.sales,getTargetLocal(m)),0);
+                                                        return Math.round(total / allMembers.length);
+                                                    })()}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </>)}
+
+                                    {/* 총 상금 상세 */}
+                                    {cardModal==='prize' && (<>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem'}}>
+                                            <h3 style={{fontSize:'1.5rem', fontWeight:'900', color:BRAND_COLORS.black}}>🏆 리그별 상금</h3>
+                                            <button onClick={()=>setCardModal(null)} style={{background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:BRAND_COLORS.coolGray}}>✕</button>
+                                        </div>
+                                        <div style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
+                                            {Object.entries(prizeInfo).map(([leagueName, info])=>{
+                                                const rankLabel = ['1위','2위','3위','4위','5위','6위'];
+                                                const rankEmoji = ['🥇','🥈','🥉','🎖','🎖','🎖'];
+                                                const rankBg = ['#fffbeb','#fafafa','#fff8f3','#f3f4f6','#f3f4f6','#f3f4f6'];
+                                                const rankColor = [ACCENT_COLORS.gold,'#9CA3AF',ACCENT_COLORS.bronze,'#6B7280','#6B7280','#6B7280'];
+                                                const badgeBg = [ACCENT_COLORS.gold,'#C0C0C0',ACCENT_COLORS.bronze,'#9CA3AF','#9CA3AF','#9CA3AF'];
+                                                return (
+                                                    <div key={leagueName} style={{borderRadius:'0.75rem', overflow:'hidden', border:'1px solid #e5e7eb'}}>
+                                                        <div style={{background:BRAND_COLORS.primary, padding:'0.75rem 1.25rem', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                                            <span style={{fontWeight:'900', color:'white', fontSize:'1rem'}}>{leagueName} 리그</span>
+                                                            <span style={{fontSize:'0.8rem', color:'rgba(255,255,255,0.8)', fontWeight:'bold'}}>총 {info.total > 0 ? `${info.total}억` : '개별산정'}</span>
+                                                        </div>
+                                                        <div style={{background:'white', display:'flex', flexWrap:'nowrap', overflowX:'auto'}}>
+                                                            {info.prizes.map((prize, idx)=>(
+                                                                <div key={idx} style={{flex:'0 0 auto', minWidth:'80px', padding:'0.875rem 0.5rem', textAlign:'center', borderRight: idx < info.prizes.length-1 ? '1px solid #f3f4f6' : 'none', background: rankBg[idx]}}>
+                                                                    <div style={{marginBottom:'0.35rem'}}>
+                                                                        {idx < 3 ? (
+                                                                            <span style={{fontSize:'1.5rem', lineHeight:'1.75rem', display:'inline-block'}}>{rankEmoji[idx]}</span>
+                                                                        ) : (
+                                                                            <span style={{display:'inline-flex', alignItems:'center', justifyContent:'center', width:'1.5rem', height:'1.75rem', color:badgeBg[idx], fontWeight:'900', fontSize:'0.85rem'}}>{idx+1}</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div style={{fontSize:'0.7rem', color:BRAND_COLORS.coolGray, marginBottom:'0.2rem'}}>{rankLabel[idx]}</div>
+                                                                    <div style={{fontWeight:'900', fontSize:'0.9rem', color:rankColor[idx]}}>
+                                                                        {prize >= 1 ? `${prize}억` : `${Math.round(prize*10000).toLocaleString()}만`}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>)}
+
+                                </div>
+                            </div>
+                        )}
+
+                        <div style={{display: 'flex', gap: '0.75rem', marginBottom: '2rem', overflowX: 'auto', paddingBottom: '0.5rem'}}>
+                            <button onClick={()=>{ setSelectedTeam('메인'); setAutoPlay(false); }} style={{padding: '1rem 2rem', borderRadius: '0.75rem', fontWeight: 'bold', fontSize: '1.125rem', whiteSpace: 'nowrap', transition: 'all 0.3s', border: selectedTeam==='메인'?'none':`2px solid ${BRAND_COLORS.lightGray}`, cursor: 'pointer', backgroundColor: selectedTeam==='메인'?BRAND_COLORS.primary:'white', color: selectedTeam==='메인'?'white':BRAND_COLORS.darkGray}}>
+                                ✨ 메인
+                            </button>
+                            {Object.keys(teams).map(teamName=>(
+                                <button key={teamName} onClick={()=>{ setSelectedTeam(teamName); setAutoPlay(false); }} style={{padding: '1rem 2rem', borderRadius: '0.75rem', fontWeight: 'bold', fontSize: '1.125rem', whiteSpace: 'nowrap', transition: 'all 0.3s', border: selectedTeam===teamName?'none':`2px solid ${BRAND_COLORS.lightGray}`, cursor: 'pointer', backgroundColor: selectedTeam===teamName?BRAND_COLORS.primary:'white', color: selectedTeam===teamName?'white':BRAND_COLORS.darkGray}}>
+                                    {teamName}
+                                </button>
+                            ))}
+                        </div>
+
+                        {selectedTeam==='메인' && (
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+                                <div style={{background: 'white', borderRadius: '1rem', padding: '2rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`}}>
+                                    <h3 style={{fontSize: '1.875rem', fontWeight: '900', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', color: BRAND_COLORS.black}}>
+                                        🏆 리그별 평균 달성률 순위
+                                    </h3>
+                                    <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+                                        {teamSummary.sort((a,b)=>b.avgAchievement-a.avgAchievement).map((league,index)=>(
+                                            <div key={league.name}>
+                                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem'}}>
+                                                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                                                        <span style={{fontSize: '3rem', width: '4rem', textAlign: 'center'}}>
+                                                            {index===0?'👑':index===1?'⭐':index===2?'✨':`${index+1}`}
+                                                        </span>
+                                                        <div>
+                                                            <span style={{fontWeight: '900', fontSize: '1.5rem', color: BRAND_COLORS.black}}>{league.name} 리그</span>
+                                                            <span style={{fontSize: '0.875rem', marginLeft: '1rem', padding: '0.25rem 0.75rem', borderRadius: '9999px', color: BRAND_COLORS.coolGray, backgroundColor: '#f3f4f6'}}>{league.memberCount}명</span>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{textAlign: 'right'}}>
+                                                        <span style={{fontSize: '2.25rem', fontWeight: '900', color:league.avgAchievement>=100?ACCENT_COLORS.gold:BRAND_COLORS.primary}}>
+                                                            {league.avgAchievement}%
+                                                        </span>
+                                                        <p style={{fontSize: '0.875rem', marginTop: '0.25rem', color: BRAND_COLORS.coolGray}}>상금: {league.prize>0?`${league.prize}억원`:'개별산정'}</p>
+                                                    </div>
+                                                </div>
+                                                <div style={{position: 'relative', height: '4rem', background: '#f3f4f6', borderRadius: '1rem', overflow: 'hidden', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)'}}>
+                                                    <div style={{position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: '1rem', transition: 'width 1s ease-out', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '1.5rem', width: `${Math.min(league.avgAchievement,100)}%`, background: index===0 ? `linear-gradient(90deg, ${BRAND_COLORS.primary}, #C91F37)` : index===1 ? 'linear-gradient(90deg, #9333EA, #7C3AED)' : index===2 ? 'linear-gradient(90deg, #3B82F6, #2563EB)' : index===3 ? 'linear-gradient(90deg, #10B981, #059669)' : `linear-gradient(90deg, ${BRAND_COLORS.coolGray}, ${BRAND_COLORS.darkGray})`}}>
+                                                        {league.avgAchievement>3 && <span style={{fontSize: '1.125rem', fontWeight: '900', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>{league.avgAchievement}%</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{background: 'linear-gradient(135deg, #fef2f2 0%, #fed7aa 100%)', borderRadius: '1rem', padding: '2rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', border: `4px solid ${BRAND_COLORS.primary}`, position: 'relative', overflow: 'hidden'}}>
+                                    <div style={{marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', position: 'relative', zIndex: 10}}>
+                                        <span style={{fontSize: '3rem'}}>⚠️</span>
+                                        <h3 style={{fontSize: '2.25rem', fontWeight: '900', color: BRAND_COLORS.primary}}>리그 규정</h3>
+                                    </div>
+                                    
+                                    <div style={{display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative', zIndex: 10}}>
+                                        <div style={{background: 'white', borderRadius: '0.75rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`}}>
+                                            <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.75rem'}}>
+                                                <span style={{fontSize: '1.5rem', marginTop: '0.25rem'}}>🎯</span>
+                                                <div>
+                                                    <h4 style={{fontSize: '1.25rem', fontWeight: '900', marginBottom: '0.75rem', color: BRAND_COLORS.black}}>상금 수여 범위</h4>
+                                                    <p style={{fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '0.75rem', color: BRAND_COLORS.primary}}>리그 참가자의 70% 이내</p>
+                                                    <div style={{marginLeft: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                                                        <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.5rem'}}>
+                                                            <span style={{fontWeight: '900', color: BRAND_COLORS.primary}}>①</span>
+                                                            <p style={{fontSize: '1rem', color: BRAND_COLORS.darkGray}}>순위 안에 드나 목표 달성률이 <span style={{fontWeight: '900', color: '#dc2626'}}>80% 넘지 못하는 경우 미지급</span></p>
+                                                        </div>
+                                                        <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.5rem'}}>
+                                                            <span style={{fontWeight: '900', color: BRAND_COLORS.primary}}>②</span>
+                                                            <p style={{fontSize: '1rem', color: BRAND_COLORS.darkGray}}>목표 달성률 <span style={{fontWeight: '900', color: '#dc2626'}}>90% 미만인 경우</span> 한 단계 낮은 순위의 금액 지급</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{background: 'white', borderRadius: '0.75rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${ACCENT_COLORS.blue}`}}>
+                                            <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.75rem'}}>
+                                                <span style={{fontSize: '1.5rem', marginTop: '0.25rem'}}>🏢</span>
+                                                <div>
+                                                    <h4 style={{fontSize: '1.25rem', fontWeight: '900', marginBottom: '0.5rem', color: BRAND_COLORS.black}}>법인 및 관계사</h4>
+                                                    <p style={{fontSize: '1rem', color: BRAND_COLORS.darkGray}}>
+                                                        법인, 관계사(인바디헬스케어, 인바디혈압계) 참가자 상금 : <span style={{fontWeight: '900', color: ACCENT_COLORS.blue}}>각자 직접 지급</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{background: 'white', borderRadius: '0.75rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${ACCENT_COLORS.purple}`}}>
+                                            <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.75rem'}}>
+                                                <span style={{fontSize: '1.5rem', marginTop: '0.25rem'}}>🎖️</span>
+                                                <div style={{flex: 1}}>
+                                                    <h4 style={{fontSize: '1.25rem', fontWeight: '900', marginBottom: '0.75rem', color: BRAND_COLORS.black}}>시상 기준 (예외)</h4>
+                                                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '0.75rem'}}>
+                                                        <div style={{background: '#faf5ff', borderRadius: '0.5rem', padding: '1rem'}}>
+                                                            <p style={{fontWeight: '900', marginBottom: '0.25rem', color: ACCENT_COLORS.purple}}>해외사업파트 / 국내사업파트</p>
+                                                            <p style={{fontSize: '0.875rem', color: BRAND_COLORS.darkGray}}>→ 2부 리그 상금 기준 지급</p>
+                                                        </div>
+                                                        <div style={{background: '#eff6ff', borderRadius: '0.5rem', padding: '1rem'}}>
+                                                            <p style={{fontWeight: '900', marginBottom: '0.25rem', color: ACCENT_COLORS.blue}}>W파트</p>
+                                                            <p style={{fontSize: '0.875rem', color: BRAND_COLORS.darkGray}}>→ 3부 리그 상금 기준 지급</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{background: 'white', borderRadius: '0.75rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${ACCENT_COLORS.gold}`}}>
+                                            <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.75rem'}}>
+                                                <span style={{fontSize: '1.5rem', marginTop: '0.25rem'}}>⭐</span>
+                                                <div>
+                                                    <h4 style={{fontSize: '1.25rem', fontWeight: '900', marginBottom: '0.75rem', color: BRAND_COLORS.black}}>특별 규정</h4>
+                                                    <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
+                                                        <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.5rem'}}>
+                                                            <span style={{fontSize: '1.25rem'}}>💰</span>
+                                                            <p style={{fontSize: '1rem', color: BRAND_COLORS.darkGray}}>
+                                                                300만원 이하 상금 대상자 중 목표 달성률 <span style={{fontWeight: '900', color: ACCENT_COLORS.gold}}>100% 초과</span> 시 
+                                                                → <span style={{fontWeight: '900', color: ACCENT_COLORS.gold}}>300만원 지급</span>
+                                                            </p>
+                                                        </div>
+                                                        <div style={{display: 'flex', alignItems: 'flex-start', gap: '0.5rem'}}>
+                                                            <span style={{fontSize: '1.25rem'}}>🔄</span>
+                                                            <p style={{fontSize: '1rem', color: BRAND_COLORS.darkGray}}>
+                                                                참가자 중 퇴사 시 → 업무 인수자가 리그 참여 시 상금 <span style={{fontWeight: '900', color: ACCENT_COLORS.green}}>100% 지급</span>
+                                                                <br/>
+                                                                <span style={{fontSize: '0.875rem', marginLeft: '1.5rem', color: BRAND_COLORS.coolGray}}>(최소 3개월 리그 수행에 한함)</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedTeam!=='메인' && (
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+                                <div style={{background: 'white', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`}}>
+                                    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                                            <button
+                                                onClick={() => setViewMode('cumulative')}
+                                                style={{padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', transition: 'all 0.3s', border: 'none', cursor: 'pointer', backgroundColor: viewMode === 'cumulative' ? BRAND_COLORS.primary : '#f3f4f6', color: viewMode === 'cumulative' ? 'white' : BRAND_COLORS.darkGray}}
+                                            >
+                                                📊 누적 달성률
+                                            </button>
+                                            <button
+                                                onClick={() => setViewMode('monthly')}
+                                                style={{padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', transition: 'all 0.3s', border: 'none', cursor: 'pointer', backgroundColor: viewMode === 'monthly' ? BRAND_COLORS.primary : '#f3f4f6', color: viewMode === 'monthly' ? 'white' : BRAND_COLORS.darkGray}}
+                                            >
+                                                📅 월별 매출
+                                            </button>
+                                        </div>
+                                        
+                                        {viewMode === 'monthly' && (
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                                                <span style={{fontWeight: 'bold', color: BRAND_COLORS.darkGray}}>월 선택:</span>
+                                                <select
+                                                    value={selectedMonth}
+                                                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                                                    style={{padding: '0.5rem 1rem', borderRadius: '0.5rem', border: `2px solid ${BRAND_COLORS.lightGray}`, fontWeight: 'bold', color: BRAND_COLORS.black, cursor: 'pointer'}}
+                                                >
+                                                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(month => (
+                                                        <option key={month} value={month}>{month}월</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{background: 'white', borderRadius: '1rem', padding: '2rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`}}>
+                                    <h3 style={{fontSize: '1.5rem', fontWeight: '900', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: BRAND_COLORS.black}}>
+                                        ⚡ {selectedTeam} 개인별 달성률 순위
+                                    </h3>
+                                    <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                                        {sortedTeamData.map((member,index)=>(
+                                            <div key={member.name}>
+                                                <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem'}}>
+                                                    <span style={{fontSize: index<3?'2.25rem':'1.5rem', fontWeight: '900', width: index<3?'3.5rem':'2.5rem', textAlign: 'center', color:index===0?ACCENT_COLORS.gold:index===1?ACCENT_COLORS.silver:index===2?ACCENT_COLORS.bronze:BRAND_COLORS.black}}>
+                                                        {index===0?'🥇':index===1?'🥈':index===2?'🥉':`${index+1}`}
+                                                    </span>
+                                                    <span style={{fontWeight: 'bold', flex: 1, fontSize: '1.125rem', color: BRAND_COLORS.black}}>{member.name}</span>
+                                                    <span style={{fontSize: '0.75rem', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontWeight: 'bold', color: 'white', backgroundColor: BRAND_COLORS.iceGray}}>{member.currency}</span>
+                                                    <span style={{fontWeight: '900', fontSize: '1.5rem', minWidth: '5rem', textAlign: 'right', color:member.achievement>=100?ACCENT_COLORS.gold:BRAND_COLORS.primary}}>
+                                                        {member.achievement}%
+                                                    </span>
+                                                </div>
+                                                <div style={{position: 'relative', height: '2.5rem', background: '#f3f4f6', borderRadius: '0.75rem', overflow: 'visible', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)'}}>
+                                                    <div style={{position: 'absolute', top: 0, left: 0, height: '100%', borderRadius: '0.75rem', overflow: 'hidden', transition: 'width 0.7s ease-out', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.75rem', width:`${Math.min(member.achievement,100)}%`, backgroundColor: index===0 ? ACCENT_COLORS.gold : index===1 ? '#4A90D9' : index===2 ? ACCENT_COLORS.bronze : index===3 ? ACCENT_COLORS.green : member.achievement>=100 ? ACCENT_COLORS.gold : member.achievement>=80 ? BRAND_COLORS.primary : member.achievement>=50 ? BRAND_COLORS.darkGray : BRAND_COLORS.coolGray}}>
+                                                        {member.achievement > 5 && <span style={{fontSize: '0.875rem', fontWeight: '900', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.2)', whiteSpace: 'nowrap'}}>
+                                                            {member.currency === 'KRW' ? `${member.salesKRW.toFixed(1)}억` : formatLocalCurrency(member.sales, member.currency)}
+                                                        </span>}
+                                                    </div>
+                                                    {member.achievement <= 5 && member.sales > 0 && (
+                                                        <div style={{position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: `calc(${Math.min(member.achievement,100)}% + 8px)`, fontSize: '0.8rem', fontWeight: '900', color: BRAND_COLORS.darkGray, whiteSpace: 'nowrap'}}>
+                                                            {member.currency === 'KRW' ? `${member.salesKRW.toFixed(1)}억` : formatLocalCurrency(member.sales, member.currency)}
+                                                        </div>
+                                                    )}
+                                                    {member.achievement>100 && (
+                                                        <div style={{position: 'absolute', top: 0, right: '0.5rem', height: '100%', display: 'flex', alignItems: 'center'}}>
+                                                            <span style={{fontSize: '1.5rem'}}>🔥</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem', fontSize: '0.75rem', color: BRAND_COLORS.coolGray}}>
+                                                    <span>{member.location}</span>
+                                                    <span>목표: {member.currency === 'KRW' ? `${member.targetKRW}억` : formatLocalCurrency(getTargetLocal(member),member.currency)}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{background: 'white', borderRadius: '1rem', padding: '2rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', borderLeft: `4px solid ${BRAND_COLORS.primary}`}}>
+                                    <h3 style={{fontSize: '1.5rem', fontWeight: '900', marginBottom: '1.5rem', color: BRAND_COLORS.black}}>
+                                        {selectedTeam} 리그 상세 현황 {viewMode === 'monthly' ? `(${selectedMonth}월 매출)` : '(누적 달성률)'}
+                                    </h3>
+                                    <div style={{overflowX: 'auto'}}>
+                                        <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                                            <thead>
+                                                <tr style={{backgroundColor: BRAND_COLORS.primary}}>
+                                                    <th style={{textAlign: 'left', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', borderTopLeftRadius: '0.75rem', whiteSpace: 'nowrap'}}>순위</th>
+                                                    <th style={{textAlign: 'left', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>이름</th>
+                                                    <th style={{textAlign: 'left', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>매출처</th>
+                                                    <th style={{textAlign: 'center', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>통화</th>
+                                                    <th style={{textAlign: 'right', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>목표(원화)</th>
+                                                    <th style={{textAlign: 'right', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>목표(현지)</th>
+                                                    <th style={{textAlign: 'right', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>실적(원화)</th>
+                                                    <th style={{textAlign: 'center', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>실적(현지)</th>
+                                                    <th style={{textAlign: 'right', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', whiteSpace: 'nowrap'}}>달성률(현지)</th>
+                                                    <th style={{textAlign: 'center', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', borderTopRightRadius: viewMode==='cumulative'?'0.75rem':'0', whiteSpace: 'nowrap'}}>최종 업데이트</th>
+                                                    {viewMode === 'monthly' && <th style={{textAlign: 'center', padding: '0.75rem 1rem', color: 'white', fontWeight: '900', borderTopRightRadius: '0.75rem', whiteSpace: 'nowrap'}}>월별 입력</th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {sortedTeamData.map((member,index)=>(
+                                                    <tr key={member.name+index} style={{borderBottom: '1px solid #e5e7eb', backgroundColor: index<3?'#fef2f2':'white', transition: 'background-color 0.3s'}}>
+                                                        <td style={{padding: '0.5rem 1rem', fontWeight: '900', fontSize: '1.25rem', color:index===0?ACCENT_COLORS.gold:index===1?ACCENT_COLORS.silver:index===2?ACCENT_COLORS.bronze:BRAND_COLORS.black}}>
+                                                            {index===0?'🥇':index===1?'🥈':index===2?'🥉':index+1}
+                                                        </td>
+                                                        <td style={{padding: '0.5rem 1rem', fontWeight: 'bold', fontSize: '1rem', color: BRAND_COLORS.black, whiteSpace: 'nowrap'}}>{member.name}</td>
+                                                        <td style={{padding: '0.5rem 1rem', color: BRAND_COLORS.coolGray, fontSize: '0.875rem'}}>{member.location}</td>
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'center'}}>
+                                                            <span style={{padding: '0.25rem 0.75rem', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 'bold', backgroundColor: '#f3f4f6', color: BRAND_COLORS.darkGray}}>
+                                                                {member.currency}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: 'bold', color: BRAND_COLORS.darkGray}}>
+                                                            {member.targetKRW > 0 ? `${member.targetKRW}억` : '-'}
+                                                        </td>
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'right', fontSize: '0.875rem', color: BRAND_COLORS.coolGray}}>{member.currency === 'KRW' ? '-' : formatLocalCurrency(getTargetLocal(member),member.currency)}</td>
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: 'bold', color: BRAND_COLORS.darkGray}}>
+                                                            {member.currency === '처' || member.currency === '대' ? '-' : `${member.salesKRW.toFixed(1)}억`}
+                                                        </td>
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'right'}}>
+                                                            {editingMember===member.name ? (
+                                                                <input type="number" value={editValue} onChange={(e)=>setEditValue(e.target.value)} style={{width: '9rem', padding: '0.5rem 0.75rem', border: `2px solid ${BRAND_COLORS.primary}`, borderRadius: '0.5rem', textAlign: 'right', fontWeight: 'bold', color: BRAND_COLORS.black}} placeholder={member.currency === "KRW" ? "원 단위 입력 (예: 100000000)" : member.currency === "처" ? "처수 입력" : member.currency === "대" ? "대수 입력" : "현지화폐"} autoFocus />
+                                                            ) : (
+                                                                <span style={{fontWeight: 'bold', color: BRAND_COLORS.black}}>{member.currency === 'KRW' ? '-' : formatLocalCurrency(member.displaySales,member.currency)}</span>
+                                                            )}
+                                                        </td>
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'right'}}>
+                                                            <span style={{padding: '0.25rem 0.75rem', borderRadius: '0.75rem', fontSize: '0.875rem', fontWeight: '900', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', color: 'white', backgroundColor: index===0 ? ACCENT_COLORS.gold : index===1 ? '#4A90D9' : index===2 ? ACCENT_COLORS.bronze : index===3 ? ACCENT_COLORS.green : member.achievement>=100 ? ACCENT_COLORS.gold : member.achievement>=80 ? BRAND_COLORS.primary : member.achievement>=50 ? BRAND_COLORS.darkGray : BRAND_COLORS.coolGray}}>
+                                                                {member.achievement}%
+                                                            </span>
+                                                        </td>
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.8rem', color: BRAND_COLORS.coolGray, whiteSpace: 'nowrap'}}>
+                                                            {member.lastUpdated || '-'}
+                                                        </td>
+                                                        {viewMode === 'monthly' && (
+                                                        <td style={{padding: '0.5rem 1rem', textAlign: 'center'}}>
+                                                            {editingMember===member.name ? (
+                                                                <div style={{display: 'flex', justifyContent: 'center', gap: '0.5rem'}}>
+                                                                    <button onClick={()=>handleSave(member.name)} style={{padding: '0.5rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', backgroundColor: 'transparent', transition: 'background-color 0.3s'}}>
+                                                                        <span style={{color: ACCENT_COLORS.green, fontSize: '1.25rem'}}>💾</span>
+                                                                    </button>
+                                                                    <button onClick={handleCancel} style={{padding: '0.5rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', backgroundColor: 'transparent', transition: 'background-color 0.3s'}}>
+                                                                        <span style={{color: '#ef4444', fontSize: '1.25rem'}}>❌</span>
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <button onClick={()=>handleEdit(member)} style={{padding: '0.5rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', backgroundColor: 'transparent', transition: 'background-color 0.3s'}}>
+                                                                    <span style={{color: BRAND_COLORS.primary, fontSize: '1.25rem'}}>📅</span>
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                        )}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {viewMode === 'cumulative' && (
+                                        <div style={{marginTop: '1rem', padding: '0.875rem 1.25rem', background: '#eff6ff', borderRadius: '0.75rem', borderLeft: `4px solid ${ACCENT_COLORS.blue}`, fontSize: '0.875rem', color: BRAND_COLORS.darkGray}}>
+                                            💡 월별 매출 탭에서 입력하면 누적 달성률에 자동 반영됩니다.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 환율 설정 모달 */}
+                        {showExchangeModal && (
+                            <div style={{position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100}}>
+                                <div style={{background: 'white', borderRadius: '1rem', padding: '2rem', maxWidth: '700px', width: '90%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'}}>
+                                    <h3 style={{fontSize: '1.5rem', fontWeight: '900', marginBottom: '0.5rem', color: BRAND_COLORS.black}}>💱 적용 환율</h3>
+                                    <div style={{background: '#fef2f2', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1.5rem', borderLeft: `4px solid ${BRAND_COLORS.primary}`}}>
+                                        <p style={{fontSize: '0.875rem', color: BRAND_COLORS.darkGray, fontWeight: 'bold'}}>
+                                            📌 금년 영업리그는 2025년 연평균 매매기준율로 고정해서 계산함
+                                        </p>
+                                    </div>
+                                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem'}}>
+                                        {Object.entries(exchangeRates).filter(([curr]) => curr !== 'KRW').map(([currency, rate]) => (
+                                            <div key={currency} style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                                                <label style={{fontWeight: 'bold', fontSize: '0.875rem', color: BRAND_COLORS.darkGray}}>{currency}</label>
+                                                <div style={{padding: '0.5rem 0.75rem', border: `1px solid ${BRAND_COLORS.lightGray}`, borderRadius: '0.5rem', fontSize: '1rem', background: '#f9fafb', color: BRAND_COLORS.darkGray}}>
+                                                    {rate.toLocaleString()}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div style={{display: 'flex', justifyContent: 'flex-end'}}>
+                                        <button onClick={() => setShowExchangeModal(false)} style={{padding: '0.75rem 1.5rem', borderRadius: '0.5rem', border: `2px solid ${BRAND_COLORS.lightGray}`, backgroundColor: 'white', color: BRAND_COLORS.darkGray, fontWeight: 'bold', cursor: 'pointer'}}>
+                                            닫기
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 최종 결과 모달 */}
+                        {showResultsModal && (
+                            <div style={{position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem'}}>
+                                <div style={{background: 'white', borderRadius: '1rem', padding: '2rem', maxWidth: '1000px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'}}>
+                                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem'}}>
+                                        <h3 style={{fontSize: '1.875rem', fontWeight: '900', color: BRAND_COLORS.black}}>🏆 최종 결과</h3>
+                                        <button onClick={() => setShowResultsModal(false)} style={{padding: '0.5rem 1rem', borderRadius: '0.5rem', border: 'none', backgroundColor: BRAND_COLORS.lightGray, color: BRAND_COLORS.darkGray, fontWeight: 'bold', cursor: 'pointer'}}>
+                                            닫기
+                                        </button>
+                                    </div>
+                                    
+                                    <div style={{display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', overflowX: 'auto'}}>
+                                        {Object.keys(teams).map(leagueName => (
+                                            <button
+                                                key={leagueName}
+                                                onClick={() => setSelectedResultLeague(leagueName)}
+                                                style={{padding: '0.75rem 1.5rem', borderRadius: '0.5rem', fontWeight: 'bold', whiteSpace: 'nowrap', border: 'none', cursor: 'pointer', backgroundColor: selectedResultLeague === leagueName ? BRAND_COLORS.primary : '#f3f4f6', color: selectedResultLeague === leagueName ? 'white' : BRAND_COLORS.darkGray}}
+                                            >
+                                                {leagueName}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div>
+                                        {(() => {
+                                            const leagueData = teams[selectedResultLeague].map(member => ({
+                                                ...member,
+                                                achievement: calculateAchievement(member.sales, getTargetLocal(member))
+                                            })).sort((a, b) => b.achievement - a.achievement);
+
+                                            const prizeMoney = prizeInfo[selectedResultLeague].prizes;
+
+                                            return (
+                                                <div>
+                                                    <div style={{marginBottom: '1rem', padding: '1rem', background: '#fef2f2', borderRadius: '0.5rem', borderLeft: `4px solid ${BRAND_COLORS.primary}`}}>
+                                                        <p style={{fontWeight: 'bold', color: BRAND_COLORS.black}}>
+                                                            상금 총액: <span style={{color: BRAND_COLORS.primary, fontSize: '1.25rem'}}>{prizeInfo[selectedResultLeague].total}억원</span>
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
+                                                        {leagueData.map((member, index) => {
+                                                            const prizeAmount = index < prizeMoney.length ? prizeMoney[index] : '-';
+                                                            const isInPrizeRange = index < Math.ceil(leagueData.length * 0.7);
+                                                            const meetsMinimum = member.achievement >= 80;
+                                                            
+                                                            return (
+                                                                <div key={member.name} style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: index < 3 ? '#fef2f2' : 'white', borderRadius: '0.5rem', border: '1px solid #e5e7eb'}}>
+                                                                    <div style={{display: 'flex', alignItems: 'center', gap: '1rem', flex: 1}}>
+                                                                        <span style={{fontSize: '1.5rem', fontWeight: '900', width: '2.5rem', textAlign: 'center', color: index === 0 ? ACCENT_COLORS.gold : index === 1 ? ACCENT_COLORS.silver : index === 2 ? ACCENT_COLORS.bronze : BRAND_COLORS.black}}>
+                                                                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                                                                        </span>
+                                                                        <div>
+                                                                            <p style={{fontWeight: 'bold', fontSize: '1.125rem', color: BRAND_COLORS.black}}>{member.name}</p>
+                                                                            <p style={{fontSize: '0.875rem', color: BRAND_COLORS.coolGray}}>{member.location}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div style={{textAlign: 'right'}}>
+                                                                        <p style={{fontSize: '1.25rem', fontWeight: '900', color: member.achievement >= 100 ? ACCENT_COLORS.gold : BRAND_COLORS.primary}}>
+                                                                            {member.achievement}%
+                                                                        </p>
+                                                                        <p style={{fontSize: '0.875rem', fontWeight: 'bold', color: isInPrizeRange && meetsMinimum ? BRAND_COLORS.primary : BRAND_COLORS.coolGray}}>
+                                                                            {isInPrizeRange && meetsMinimum ? prizeAmount : '미지급'}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<SalesDashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html>
