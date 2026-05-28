@@ -309,7 +309,11 @@
             const convertToKRW = (amount, currency) => {
                 if (currency === 'KRW') return amount;
                 if (currency === '처' || currency === '대') return amount;
-                return (amount * exchangeRates[currency]) / 100000000;
+                // JPY, VND는 100 단위 기준 환율이므로 100으로 나눔
+                const rate = (currency === 'JPY' || currency === 'VND')
+                    ? exchangeRates[currency] / 100
+                    : exchangeRates[currency];
+                return (amount * rate) / 100000000;
             };
 
             // targetKRW(억 단위) 기준으로 현지화폐 목표 동적 계산
@@ -320,7 +324,11 @@
                 if (currency === 'KRW') return targetKRW;
                 if (currency === '처' || currency === '대') return member.targetLocal;
                 if (!exchangeRates[currency]) return member.targetLocal;
-                return Math.round((targetKRW * 100000000) / exchangeRates[currency]);
+                // JPY, VND는 100 단위 기준 환율이므로 100으로 나눔
+                const rate = (currency === 'JPY' || currency === 'VND')
+                    ? exchangeRates[currency] / 100
+                    : exchangeRates[currency];
+                return Math.round((targetKRW * 100000000) / rate);
             };
 
             const formatLocalCurrency = (amount, currency) => {
