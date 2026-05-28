@@ -386,8 +386,16 @@
             const sortedTeamData = selectedTeam === '메인' ? [] : [...currentTeamData].sort((a, b) => b.achievement - a.achievement);
 
             const handleEdit = (member) => {
+                // 점심시간 체크 (12:00 ~ 13:00)
+                const now = new Date();
+                const hour = now.getHours();
+                if (hour === 12) {
+                    alert('⏰ 점심시간(12:00-13:00)에는 데이터 입력이 불가능합니다.');
+                    return;
+                }
+
                 setEditingMember(member.name);
-                const currentSales = viewMode === 'monthly' 
+                const currentSales = viewMode === 'monthly'
                     ? (member.monthlySales?.[selectedMonth] || 0)
                     : member.sales;
                 setEditValue(currentSales.toString());
